@@ -12,7 +12,7 @@
 |---|---|---|---|
 | **Frontend UI & Build** | 🟢 Healthy | `npm run build` in `frontend/` | React 19 + Vite + Tailwind CSS bundle built cleanly in ~375ms. |
 | **Frontend Type Safety** | 🟢 Healthy | `npm run lint` (`tsc --noEmit`) | 0 TypeScript errors across entire application. |
-| **FastAPI Backend Server** | 🟢 Healthy | `pytest backend/tests/ -v` (48/48 Passed) | Modularized under `backend/app/`, passes all 48 test assertions in ~3.2s. |
+| **FastAPI Backend Server** | 🟢 Healthy | `pytest backend/tests/ -v` (59/59 Passed) | Modularized under `backend/app/`, passes all 59 test assertions in ~3.8s. |
 | **Live Server Health Check**| 🟢 Verified | Live `GET /health` & `/api/health` on port 8000 | Returns HTTP 200 `{"status":"healthy","database_configured":true}`. |
 | **Live Swagger / OpenAPI**  | 🟢 Verified | Live `GET /docs` & `/openapi.json` | Returns HTTP 200 with complete interactive API documentation. |
 | **Jobs API (CRUD + Search)** | 🟢 Verified | Automated Pytest (unauth rejection, confirmation) | Full validation, search queries, status filters, tenant isolation. |

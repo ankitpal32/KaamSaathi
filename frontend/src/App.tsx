@@ -19,7 +19,8 @@ import { VoiceAssistantModal } from './components/VoiceAssistantModal';
 import { JobModal } from './components/JobModal';
 import { RecordPaymentModal } from './components/RecordPaymentModal';
 import { ReminderModal } from './components/ReminderModal';
-import { CheckCircle2, Server, Database, AlertCircle, RefreshCw, Key, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, Server, Database, AlertCircle, RefreshCw, Key, ShieldCheck, UserCheck } from 'lucide-react';
+import { initAnonymousSession, getValidAccessToken } from './services/supabaseClient';
 
 export default function App() {
   // 1. Core State
@@ -51,6 +52,15 @@ export default function App() {
       return '';
     }
   });
+  const [authSession, setAuthSession] = useState<{
+    userId: string | null;
+    isAnonymous: boolean;
+    error: string | null;
+  }>({
+    userId: null,
+    isAnonymous: true,
+    error: null,
+  });
   const [isTokenModalOpen, setIsTokenModalOpen] = useState(false);
   const [tempTokenInput, setTempTokenInput] = useState('');
 
@@ -74,8 +84,8 @@ export default function App() {
     }, 3500);
   };
 
-  // 3. Load initial data from backend or fallback to localStorage
-  const reloadData = useCallback(async () => {
+  // 3. Load initial data from backend using anonymous or configured session
+  const reloadData = useCallback(async (tokenParam?: string) => {
     setIsLoadingJobs(true);
     let apiSuccess = false;
     let isOnline = false;
@@ -87,14 +97,17 @@ export default function App() {
       isOnline = true;
       isDbConfigured = health.database_configured;
 
-      const storedToken = localStorage.getItem('supabase_auth_token') || '';
-      if (storedToken && isDbConfigured) {
+      const activeToken = tokenParam !== undefined
+        ? tokenParam
+        : ((await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '');
+
+      if (activeToken && isDbConfigured) {
         try {
-          const apiJobs = await JobApiService.getJobs(storedToken);
+          const apiJobs = await JobApiService.getJobs(activeToken);
           setJobs(apiJobs);
           
           try {
-            const apiPayments = await JobApiService.getAllPayments(storedToken);
+            const apiPayments = await JobApiService.getAllPayments(activeToken);
             setPayments(apiPayments.map((p) => {
               const matchedJob = apiJobs.find((j) => j.id === p.job_id);
               return {
@@ -112,7 +125,7 @@ export default function App() {
           }
 
           try {
-            const apiReminders = await JobApiService.getReminders(storedToken);
+            const apiReminders = await JobApiService.getReminders(activeToken);
             setReminders(apiReminders.map((r) => {
               const matchedJob = apiJobs.find((j) => j.id === r.job_id);
               return {
@@ -133,7 +146,7 @@ export default function App() {
           apiSuccess = true;
         } catch (apiErr: any) {
           errMsg = apiErr.message;
-          console.warn('Backend data retrieval requires valid auth token:', apiErr.message);
+          console.warn('Backend data retrieval with session token:', apiErr.message);
         }
       }
     } catch {
@@ -165,7 +178,32 @@ export default function App() {
     if (savedLang === 'en' || savedLang === 'bn') {
       setLanguage(savedLang);
     }
-    reloadData();
+
+    // Automatically initialize or restore anonymous Supabase session on app launch (No-Login MVP)
+    const initSession = async () => {
+      const anonRes = await initAnonymousSession();
+      if (anonRes.token) {
+        setAuthToken(anonRes.token);
+        setAuthSession({
+          userId: anonRes.userId,
+          isAnonymous: anonRes.isAnonymous,
+          error: null,
+        });
+        await reloadData(anonRes.token);
+      } else {
+        setAuthSession({
+          userId: null,
+          isAnonymous: false,
+          error: anonRes.error,
+        });
+        if (anonRes.error) {
+          showToast(anonRes.error, 'error');
+        }
+        await reloadData('');
+      }
+    };
+
+    initSession();
   }, [reloadData]);
 
   // Language toggle
@@ -183,29 +221,30 @@ export default function App() {
 
   // Job Actions
   const handleSaveJob = async (jobData: any) => {
-    const storedToken = localStorage.getItem('supabase_auth_token') || '';
+    const activeToken = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '';
 
     // If we have an active backend and token, persist to PostgreSQL
     if (!backendState.online) {
       showToast('FastAPI backend is offline. Cannot save job.', 'error');
       return;
     }
-    if (!storedToken) {
-      showToast('Authentication required: Please set your Supabase Bearer Token to save jobs.', 'error');
+    if (!activeToken) {
+      const errorMsg = authSession.error || 'Authentication required: Anonymous session could not be established.';
+      showToast(errorMsg, 'error');
       return;
     }
 
     try {
       if (jobData.id && !jobData.id.startsWith('job-')) {
-        const updated = await JobApiService.updateJob(jobData.id, jobData, storedToken);
+        const updated = await JobApiService.updateJob(jobData.id, jobData, activeToken);
         setJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
         showToast(translations[language].jobs.jobUpdatedSuccess, 'success');
       } else {
-        const created = await JobApiService.createJob(jobData, storedToken);
+        const created = await JobApiService.createJob(jobData, activeToken);
         setJobs((prev) => [created, ...prev]);
         showToast('Job confirmed and saved to Supabase PostgreSQL!', 'success');
       }
-      reloadData();
+      reloadData(activeToken);
     } catch (err: any) {
       showToast(`Backend save failed: ${err.message}`, 'error');
       throw err;
@@ -213,20 +252,20 @@ export default function App() {
   };
 
   const handleDeleteJob = async (jobId: string) => {
-    const storedToken = localStorage.getItem('supabase_auth_token') || '';
+    const activeToken = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '';
     if (!backendState.online) {
       showToast('Backend offline. Cannot delete job.', 'error');
       return;
     }
-    if (!storedToken) {
-      showToast('Authentication required: Please set your Supabase Auth Token to delete records.', 'error');
+    if (!activeToken) {
+      showToast(authSession.error || 'Authentication required to delete records.', 'error');
       return;
     }
 
     try {
-      await JobApiService.deleteJob(jobId, storedToken);
+      await JobApiService.deleteJob(jobId, activeToken);
       showToast('Job removed from PostgreSQL database.', 'info');
-      reloadData();
+      reloadData(activeToken);
     } catch (err: any) {
       showToast(`Delete failed: ${err.message}`, 'error');
     }
@@ -255,20 +294,20 @@ export default function App() {
     paymentMode: PaymentMode;
     notes?: string;
   }) => {
-    const storedToken = localStorage.getItem('supabase_auth_token') || '';
+    const activeToken = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '';
     if (!backendState.online) {
       showToast('Backend offline. Cannot record payment.', 'error');
       return;
     }
-    if (!storedToken) {
-      showToast('Authentication required: Please set your Supabase Auth Token to record payments.', 'error');
+    if (!activeToken) {
+      showToast(authSession.error || 'Authentication required: Anonymous session inactive.', 'error');
       return;
     }
 
     try {
-      await JobApiService.recordPayment(paymentData.jobId, paymentData, storedToken);
+      await JobApiService.recordPayment(paymentData.jobId, paymentData, activeToken);
       showToast('Payment recorded and balance reconciled on backend!', 'success');
-      reloadData();
+      reloadData(activeToken);
     } catch (err: any) {
       showToast(`Payment failed: ${err.message}`, 'error');
     }
@@ -276,63 +315,70 @@ export default function App() {
 
   // Reminder Actions
   const handleToggleReminder = async (id: string) => {
-    const storedToken = localStorage.getItem('supabase_auth_token') || '';
-    if (!backendState.online || !storedToken) {
-      showToast('Authentication required: Please set your Supabase Auth Token.', 'error');
+    const activeToken = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '';
+    if (!backendState.online || !activeToken) {
+      showToast(authSession.error || 'Authentication required to update reminders.', 'error');
       return;
     }
     try {
-      await JobApiService.toggleReminder(id, undefined, storedToken);
-      reloadData();
+      await JobApiService.toggleReminder(id, undefined, activeToken);
+      reloadData(activeToken);
     } catch (err: any) {
       showToast(`Toggle failed: ${err.message}`, 'error');
     }
   };
 
   const handleDeleteReminder = async (id: string) => {
-    const storedToken = localStorage.getItem('supabase_auth_token') || '';
-    if (!backendState.online || !storedToken) {
-      showToast('Authentication required: Please set your Supabase Auth Token.', 'error');
+    const activeToken = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '';
+    if (!backendState.online || !activeToken) {
+      showToast(authSession.error || 'Authentication required to delete reminders.', 'error');
       return;
     }
     try {
-      await JobApiService.deleteReminder(id, storedToken);
+      await JobApiService.deleteReminder(id, activeToken);
       showToast('Reminder deleted from database.', 'info');
-      reloadData();
+      reloadData(activeToken);
     } catch (err: any) {
       showToast(`Delete failed: ${err.message}`, 'error');
     }
   };
 
   const handleSaveReminder = async (reminderData: any) => {
-    const storedToken = localStorage.getItem('supabase_auth_token') || '';
-    if (!backendState.online || !storedToken) {
-      showToast('Authentication required: Please set your Supabase Auth Token to schedule reminders.', 'error');
+    const activeToken = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || '';
+    if (!backendState.online || !activeToken) {
+      showToast(authSession.error || 'Authentication required to schedule reminders.', 'error');
       return;
     }
     try {
-      await JobApiService.createReminder(reminderData, storedToken);
+      await JobApiService.createReminder(reminderData, activeToken);
       showToast('Follow-up reminder scheduled on backend.', 'success');
-      reloadData();
+      reloadData(activeToken);
     } catch (err: any) {
       showToast(`Failed to schedule reminder: ${err.message}`, 'error');
     }
   };
 
-  // Save Auth Token
+  // Manual token save / reset handler
   const handleSaveToken = (e: React.FormEvent) => {
     e.preventDefault();
     const cleanToken = tempTokenInput.trim();
     setAuthToken(cleanToken);
     if (cleanToken) {
       localStorage.setItem('supabase_auth_token', cleanToken);
-      showToast('Supabase auth token configured.', 'success');
+      setAuthSession((prev) => ({ ...prev, error: null }));
+      showToast('Custom session token configured.', 'success');
     } else {
       localStorage.removeItem('supabase_auth_token');
-      showToast('Auth token cleared.', 'info');
+      showToast('Auth token cleared. Re-establishing anonymous session...', 'info');
+      initAnonymousSession().then((res) => {
+        if (res.token) {
+          setAuthToken(res.token);
+          setAuthSession({ userId: res.userId, isAnonymous: res.isAnonymous, error: null });
+        }
+      });
     }
     setIsTokenModalOpen(false);
-    reloadData();
+    reloadData(cleanToken);
   };
 
   // Pending payments count badge
@@ -394,11 +440,18 @@ export default function App() {
 
             <span className="hidden sm:inline">
               {backendState.usingApi ? (
-                <span className="text-emerald-400 font-semibold">● Cloud Sync Active</span>
+                <span className="text-emerald-400 font-semibold flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  {authSession.isAnonymous ? '● Anonymous Cloud Session' : '● Cloud Sync Active'}
+                </span>
+              ) : authSession.error ? (
+                <span className="text-amber-300" title={authSession.error}>
+                  ● Auth: {authSession.error.length > 35 ? `${authSession.error.substring(0, 35)}...` : authSession.error}
+                </span>
               ) : authToken ? (
                 <span className="text-rose-400">● Status: {backendState.error || 'Connection Failed'}</span>
               ) : (
-                <span className="text-amber-300">● Local Ledger Mode</span>
+                <span className="text-amber-300">● Session Inactive</span>
               )}
             </span>
           </div>
@@ -410,11 +463,11 @@ export default function App() {
                 setIsTokenModalOpen(true);
               }}
               className="px-2.5 py-1 bg-stone-800 hover:bg-stone-700 text-stone-200 rounded-lg text-[11px] font-medium flex items-center gap-1 transition-colors border border-stone-700 whitespace-nowrap"
-              title="Configure Supabase Bearer JWT Token"
+              title="Session Details & Local Storage Notice"
             >
               <Key className="w-3 h-3 text-emerald-400 shrink-0" />
-              <span className="hidden sm:inline">{authToken ? 'Cloud Auth (Active)' : 'Set Cloud Token'}</span>
-              <span className="sm:hidden">{authToken ? 'Auth (OK)' : 'Token'}</span>
+              <span className="hidden sm:inline">{authToken ? 'Cloud Session' : 'Session Info'}</span>
+              <span className="sm:hidden">{authToken ? 'Session' : 'Auth'}</span>
             </button>
 
             <button
@@ -543,16 +596,16 @@ export default function App() {
         onSaveReminder={handleSaveReminder}
       />
 
-      {/* Supabase Bearer Token Configuration Modal */}
+      {/* Supabase Anonymous Session & Storage Notice Modal */}
       {isTokenModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[90vh]">
             <div className="px-4 sm:px-5 py-3.5 sm:py-4 bg-slate-50 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-indigo-100 rounded-lg text-indigo-700">
+                <div className="p-1.5 bg-emerald-100 rounded-lg text-emerald-700">
                   <Key className="w-4 h-4" />
                 </div>
-                <h3 className="font-bold text-slate-900 text-sm">Supabase Authentication Token</h3>
+                <h3 className="font-bold text-slate-900 text-sm">KaamSaathi Cloud Session (No-Login MVP)</h3>
               </div>
               <button 
                 onClick={() => setIsTokenModalOpen(false)}
@@ -564,22 +617,55 @@ export default function App() {
             </div>
 
             <form onSubmit={handleSaveToken} className="p-4 sm:p-5 space-y-4 overflow-y-auto">
-              <p className="text-xs text-slate-600 leading-relaxed">
-                Enter a Supabase user access token (JWT) to test real authenticated PostgreSQL database queries with Row Level Security. Leave empty to run in Local Demo Mode.
-              </p>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Bearer Token (JWT)
-                </label>
-                <textarea
-                  rows={4}
-                  value={tempTokenInput}
-                  onChange={(e) => setTempTokenInput(e.target.value)}
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                  className="w-full px-3 py-2 text-xs font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                />
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs space-y-1.5 leading-relaxed">
+                <div className="font-bold flex items-center gap-1.5 text-amber-800">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+                  Important Data Durability Notice
+                </div>
+                <p>
+                  KaamSaathi uses an automatic anonymous cloud session so technicians can work immediately without passwords or sign-up forms.
+                </p>
+                <p className="font-medium text-amber-950">
+                  ⚠️ Because session tokens are saved in browser storage, clearing your browser cookies, cache, or site data will permanently reset your anonymous identity, and previously saved records will no longer be accessible.
+                </p>
               </div>
+
+              {authSession.userId && (
+                <div className="p-2.5 bg-stone-50 border border-stone-200 rounded-xl text-xs space-y-1">
+                  <span className="font-semibold text-stone-600">Anonymous User ID:</span>
+                  <div className="font-mono text-[11px] text-stone-800 break-all select-all">
+                    {authSession.userId}
+                  </div>
+                </div>
+              )}
+
+              {authSession.error && (
+                <div className="p-2.5 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
+                  <div className="font-bold flex items-center gap-1 text-rose-700">
+                    <AlertCircle className="w-3.5 h-3.5" />
+                    Session Status Warning
+                  </div>
+                  <p>{authSession.error}</p>
+                </div>
+              )}
+
+              <details className="text-xs text-stone-600 pt-1 border-t border-stone-100">
+                <summary className="cursor-pointer font-medium text-stone-700 hover:text-stone-900 py-1">
+                  Advanced: Custom Token Override
+                </summary>
+                <div className="mt-2 space-y-2">
+                  <label className="block text-[11px] font-semibold text-slate-700">
+                    Bearer Token (JWT)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={tempTokenInput}
+                    onChange={(e) => setTempTokenInput(e.target.value)}
+                    placeholder="Paste manual JWT to override session..."
+                    className="w-full px-3 py-2 text-[11px] font-mono bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+                  />
+                </div>
+              </details>
 
               <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
                 <button
@@ -598,13 +684,13 @@ export default function App() {
                     onClick={() => setIsTokenModalOpen(false)}
                     className="px-3 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900"
                   >
-                    Cancel
+                    Close
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 text-xs font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-sm transition-all"
+                    className="px-4 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-sm transition-all"
                   >
-                    Save Token
+                    Apply Session
                   </button>
                 </div>
               </div>

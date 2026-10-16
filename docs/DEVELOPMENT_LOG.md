@@ -475,3 +475,29 @@
   - npm run lint (tsc --noEmit): 0 errors.
   - npm run build: Production bundle built cleanly in 275ms.
   - backend/venv/Scripts/python -m pytest backend/tests/ -v: 53/53 tests passed in 4.11s.
+
+### [2026-10-16] — No-Login MVP: Anonymous Supabase Session Implementation
+- **Task**: Remove login/signup friction for technicians by implementing automatic Supabase Anonymous Sign-In on initial app launch. Preserve strict Row-Level Security, identity derivation, and multi-tenant isolation.
+- **Actions Executed**:
+  1. **Official Supabase Client Integration**:
+     - Installed `@supabase/supabase-js` in `frontend/`.
+     - Created `frontend/src/services/supabaseClient.ts` with `initAnonymousSession`, `getValidAccessToken`, and automatic session refresh via `onAuthStateChange`.
+     - Documented data durability constraints: anonymous sessions persist in `localStorage`; clearing browser storage resets the anonymous identity.
+  2. **Zero-Friction Launch Journey**:
+     - Removed all mandatory login/signup barriers from the app launch sequence in `frontend/src/App.tsx`.
+     - Automatically requests/restores an anonymous session on initial mount.
+     - Automatically attaches the Bearer token to all outgoing FastAPI requests for jobs, payments, and reminders.
+     - Scoped `VoiceAssistantModal.tsx` actions to use the same active session token.
+  3. **Honest Session & Error Presentation**:
+     - Updated status bar to indicate `● Anonymous Cloud Session` when active and `● Auth Warning` if session minting fails.
+     - Added Session Details & Durability Notice modal with explicit warnings about browser cache clearing.
+     - Maintained zero fake data fallbacks; if session fails, honest error is shown.
+  4. **Comprehensive Test Suite**:
+     - Authored `backend/tests/test_anonymous_session_workflow.py` with 6 exhaustive tests.
+     - Verified anonymous job creation, payment recording, balance arithmetic, reminders lifecycle, Bolna voice function scoping, and multi-tenant isolation between two anonymous sessions.
+- **Verification Outcomes**:
+  - `npm run lint` (`tsc --noEmit`): 0 errors.
+  - `npm run build`: Production bundle built cleanly in 305ms.
+  - `backend/venv/Scripts/python -m pytest backend/tests/ -v`: **59/59 passed** in 3.78s across all 8 test suites.
+  - Supabase Cloud Status: Project currently returns `anonymous_provider_disabled` until toggled ON in Supabase Dashboard -> Authentication -> Providers -> Anonymous. Clear error is displayed without insecure fallbacks.
+

@@ -34,6 +34,7 @@ import { translations } from '../locales/translations';
 import { parseVoiceInput, isSpeechRecognitionSupported } from '../services/voiceParser';
 import { BolnaVoiceService } from '../services/bolnaVoiceService';
 import { JobApiService } from '../services/jobApi';
+import { getValidAccessToken } from '../services/supabaseClient';
 
 interface VoiceAssistantModalProps {
   isOpen: boolean;
@@ -303,11 +304,11 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
     setDemoTranscript(raw);
     setQaAnswer(null);
 
-    const token = localStorage.getItem('supabase_auth_token') || localStorage.getItem('sb_access_token');
+    const token = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || localStorage.getItem('sb_access_token');
     if (!token) {
       setQaAnswer({
         question: raw,
-        answer: 'Please configure your Supabase Auth Token to query your live database records.',
+        answer: 'Cloud session is inactive. Please ensure anonymous session is initialized to query your records.',
         source: 'backend',
       });
       setDemoState('idle');
@@ -374,9 +375,9 @@ export const VoiceAssistantModal: React.FC<VoiceAssistantModalProps> = ({
       return;
     }
 
-    const token = localStorage.getItem('supabase_auth_token') || localStorage.getItem('sb_access_token') || '';
+    const token = (await getValidAccessToken()) || localStorage.getItem('supabase_auth_token') || localStorage.getItem('sb_access_token') || '';
     if (!token) {
-      setDemoErrorMessage('Authentication required: Please configure your Supabase Auth Token in the top status bar before saving to the cloud database.');
+      setDemoErrorMessage('Authentication required: Anonymous cloud session could not be established.');
       return;
     }
 
