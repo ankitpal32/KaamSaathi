@@ -25,6 +25,7 @@
 | **Secret Protection**       | 🟢 Verified | Grep scan + `.gitignore` audit | Bolna key safely isolated in `backend/.env`. No secrets in frontend bundle. `.env*` properly excluded in `.gitignore`. |
 | **Bolna WebRTC Voice Call** | 🟢 Verified | Live `POST /api/bolna-session` + Pytest suite | Connected to `https://api.bolna.ai/web-call/freeswitch-session`. Live HTTP 200 with SIP credentials verified against real Bolna cloud. |
 | **Responsive UI/UX (320px–1600px+ & 110% Zoom)** | 🟢 Verified | Multi-viewport audit across 7 screen size categories | 0px horizontal overflow (`scrollWidth == innerWidth`), accessible touch targets, and mobile nav clearance. |
+| **Vercel Multi-Service Deployment** | 🟢 Configured | `vercel.json` + `npm run build` + `pytest` | Root `vercel.json` with `frontend` (Vite) and `backend` (FastAPI), bindings, and path rewrites. |
 
 ---
 

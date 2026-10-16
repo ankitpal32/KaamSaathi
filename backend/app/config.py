@@ -37,7 +37,14 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> List[str]:
-        return [origin.strip() for origin in self.FRONTEND_ORIGINS.split(",") if origin.strip()]
+        origins = [origin.strip() for origin in self.FRONTEND_ORIGINS.split(",") if origin.strip()]
+        vercel_url = os.environ.get("VERCEL_URL")
+        if vercel_url:
+            origins.append(f"https://{vercel_url}")
+        vercel_branch_url = os.environ.get("VERCEL_BRANCH_URL")
+        if vercel_branch_url:
+            origins.append(f"https://{vercel_branch_url}")
+        return list(dict.fromkeys(origins))
 
     @property
     def is_supabase_configured(self) -> bool:

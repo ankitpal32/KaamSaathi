@@ -1,11 +1,12 @@
 import { Job, TradeType, JobStatus } from '../types';
 
 const rawBaseUrl = 
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL) || 
-  'http://localhost:8000';
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_BASE_URL !== undefined)
+    ? import.meta.env.VITE_API_BASE_URL
+    : (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? '' : 'http://localhost:8000');
 
 // Normalize base URL so `${API_BASE_URL}/api/...` and `${API_BASE_URL}/health` resolve correctly regardless of trailing /api
-export const API_BASE_URL = rawBaseUrl.replace(/\/api\/?$/, '').replace(/\/$/, '');
+export const API_BASE_URL = rawBaseUrl ? rawBaseUrl.replace(/\/api\/?$/, '').replace(/\/$/, '') : '';
 
 export interface BackendHealth {
   status: string;

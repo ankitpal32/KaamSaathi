@@ -501,3 +501,19 @@
   - `backend/venv/Scripts/python -m pytest backend/tests/ -v`: **59/59 passed** in 3.78s across all 8 test suites.
   - Supabase Cloud Status: Project currently returns `anonymous_provider_disabled` until toggled ON in Supabase Dashboard -> Authentication -> Providers -> Anonymous. Clear error is displayed without insecure fallbacks.
 
+### [2026-10-16] — Vercel Multi-Service Deployment Configuration
+- **Task**: Configure KaamSaathi repository for atomic multi-service deployment on Vercel with shared routing, service definitions, environment bindings, and production origin handling.
+- **Actions Executed**:
+  1. **Multi-Service Definition (`vercel.json`)**:
+     - Configured root `vercel.json` declaring `backend` (FastAPI at `backend/`, entrypoint `main.py`) and `frontend` (Vite SPA at `frontend/`).
+     - Declared internal service binding on `frontend` referencing `backend` (`BACKEND_URL`).
+     - Ordered public rewrites: `/api/(.*)`, `/health`, `/docs`, `/openapi.json`, `/redoc`, and `/bolna-session` routed to `backend`; catch-all `/(.*)` routed to `frontend`.
+  2. **Application Code Reconciled for Routing & Bindings**:
+     - `frontend/src/services/jobApi.ts`: Updated `rawBaseUrl` and `API_BASE_URL` so that when `VITE_API_BASE_URL` is omitted, requests on non-localhost hosts default to relative paths `""`, resolving directly against the shared Vercel origin via edge rewrites.
+     - `backend/app/config.py`: Expanded `cors_origins` property to automatically recognize Vercel environment URLs (`VERCEL_URL`, `VERCEL_BRANCH_URL`).
+     - `backend/app/main.py`: Added `allow_origin_regex=r"https://.*\.vercel\.app"` to CORS middleware for preview deployments.
+     - `backend/main.py`: Created top-level entrypoint re-exporting `app` from `app.main` for clean ASGI runtime discovery.
+- **Verification Outcomes**:
+  - `backend\venv\Scripts\pytest backend/tests/ -v`: **59/59 passed** (100% pass rate).
+  - `frontend`: `npm run lint` (`tsc --noEmit`): **0 errors**.
+  - `frontend`: `npm run build`: Production bundle built cleanly in 321ms.
