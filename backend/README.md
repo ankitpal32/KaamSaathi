@@ -16,7 +16,7 @@ backend/
 │   ├── routes/              # Modular API endpoints (jobs, payments, reminders, dashboard, bolna)
 │   ├── services/            # Core business logic, reconciliation, calculations, tool executors
 │   └── dependencies/        # FastApi dependency injection (auth validation, Supabase client)
-├── tests/                   # Pytest automated test suite (19 test cases)
+├── tests/                   # Pytest automated test suite (53 passing test assertions)
 ├── requirements.txt         # Production and testing Python dependencies
 ├── pytest.ini               # Pytest configuration and pythonpath resolution
 ├── .env.example             # Backend environment template
@@ -73,12 +73,9 @@ pip install -r requirements.txt
 ## 2. Supabase Configuration & Migrations
 
 1. In your [Supabase Dashboard](https://supabase.com/dashboard), navigate to **SQL Editor**.
-2. Run the migration scripts located at the project root `supabase/migrations/` in sequence:
-   - `001_create_jobs_table.sql`
-   - `002_create_customers_table.sql`
-   - `003_create_payment_events_table.sql`
-   - `004_create_reminders_table.sql`
-   - `005_create_audit_events_table.sql`
+2. Run the consolidated migration script `supabase/migrations/000_full_schema.sql` (or run `001` through `005` in sequential order):
+   - `000_full_schema.sql` (Consolidated idempotent setup)
+   - Or sequentially: `001_create_jobs_table.sql` -> `002_create_customers_table.sql` -> `003_create_payment_events_table.sql` -> `004_create_reminders_table.sql` -> `005_create_audit_events_table.sql`
 3. Obtain your Supabase API credentials:
    - Navigate to **Project Settings** -> **API**.
    - Copy **Project URL** (`SUPABASE_URL`).

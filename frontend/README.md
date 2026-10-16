@@ -102,4 +102,4 @@ npm run preview
 - **Typography**: Plus Jakarta Sans for UI readability, JetBrains Mono for numbers and transaction amounts.
 - **Color Palette**: Warm ivory background (`#FBF9F5`), deep slate text, vibrant indigo primary accents, and emerald accents for payment completions.
 - **Currency Formatting**: Format Indian Rupee values with `₹{amount.toLocaleString('en-IN')}` and tabular numerals (`font-mono tabular-nums`).
-- **Offline / Local Fallback**: When the backend is offline or unconfigured, the application gracefully alerts the user with "Demo Mode / LocalStorage" indicators and avoids silent failures.
+- **Offline & Connectivity Status**: When the backend is offline or unconfigured, the application renders honest empty states with clear connectivity indicators ("Live Supabase Ledger", "Awaiting Auth Token", "Backend Offline") rather than fabricating demo records or silent failures.
