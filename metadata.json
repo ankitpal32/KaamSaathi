@@ -1,0 +1,6 @@
+{
+  "name": "KaamSaathi - Voice-First Workday Assistant",
+  "description": "Voice-first workday assistant for independent technicians in India. Effortlessly track jobs, record payments, and manage follow-up reminders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

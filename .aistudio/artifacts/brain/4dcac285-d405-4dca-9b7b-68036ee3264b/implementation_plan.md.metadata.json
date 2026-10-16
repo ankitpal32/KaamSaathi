@@ -1,0 +1,6 @@
+{
+  "summary": "Implementation plan for KaamSaathi — a voice-first workday assistant tailored for electricians, plumbers, and appliance repair technicians in India. Covers responsive dashboard with Recharts, voice assistant simulator with Web Speech API and scenario presets, full job and payment tracking, follow-up reminders, English/Bengali localization, and localStorage persistence.",
+  "updatedAt": "2026-10-15T17:15:13.701208829Z",
+  "requestFeedback": true,
+  "userFacing": true
+}
