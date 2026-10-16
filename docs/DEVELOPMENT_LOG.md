@@ -517,3 +517,20 @@
   - `backend\venv\Scripts\pytest backend/tests/ -v`: **59/59 passed** (100% pass rate).
   - `frontend`: `npm run lint` (`tsc --noEmit`): **0 errors**.
   - `frontend`: `npm run build`: Production bundle built cleanly in 321ms.
+
+### [2026-10-16] — Vercel Build Fix: esbuild Peer Dependency Conflict Resolution
+- **Task**: Fix Vercel deployment build failure caused by ERESOLVE peer dependency conflict between Vite 8.3.4 (requiring esbuild ^0.27.0 or ^0.28.0) and frontend/package.json (specifying esbuild ^0.25.0).
+- **Root Cause Analysis**:
+  - frontend/package.json declared direct devDependency "esbuild": "^0.25.0" which resolved to esbuild@0.25.12.
+  - vite@8.3.4 declared peer dependency peerOptional esbuild@"^0.27.0 || ^0.28.0".
+  - When npm install ran, npm failed with ERESOLVE: Conflicting peer dependency: esbuild@0.28.2.
+- **Actions Executed**:
+  1. Updated frontend/package.json: Upgraded devDependency from "esbuild": "^0.25.0" to "esbuild": "^0.28.0".
+  2. Regenerated frontend/package-lock.json cleanly via npm install without --force or --legacy-peer-deps.
+  3. Deduplicated esbuild binaries across vite, tsx, and devDependencies to unified esbuild@0.28.2.
+- **Verification Outcomes**:
+  - frontend/: npm install exited with code 0 (0 vulnerabilities, 0 peer conflicts).
+  - frontend/: npm ci --dry-run exited with code 0.
+  - frontend/: npm run lint (tsc --noEmit) exited with code 0.
+  - frontend/: npm run build exited with code 0 in 317ms.
+  - backend/: pytest backend/tests/ -v: 59/59 passed (100% pass rate).
